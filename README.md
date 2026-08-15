@@ -1,4 +1,8 @@
-# Vector Slide
+<p align="center">
+  <img src="assets/vector-logo.svg" width="120" height="120" alt="Vector Logo">
+</p>
+
+<h1 align="center">Vector Slide</h1>
 
 > Live-панель ползунков для тонкой настройки web-дизайна. Вместо "подвинь левее → много → верни" — крутишь ползунок и видишь результат вживую.
 
