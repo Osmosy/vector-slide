@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector Slide — Live Design Jig</title>
+<!--
+  Vector Slide — live-панель ползунков для тонкой настройки дизайна.
+  Подключается поверх любой страницы. Меняет CSS custom properties в реальном времени.
+  Поймали идеал → кнопка "Copy CSS" → вставили в стили → панель убрали.
+
+  Использование:
+  1. Подключите этот файл к странице (или вставьте содержимое в <head>)
+  2. Назначьте CSS-переменные элементам: var(--vs-padding), var(--vs-radius) и т.д.
+  3. Крутите ползунки, смотрите результат вживую
+  4. Нажмите "Copy CSS" — значения скопируются в буфер
+  5. Вставьте значения в стили, удалите панель
+
+  Все переменные имеют префикс --vs- (Vector Slide), чтобы не конфликтовать.
+-->
+<style>
+/* ─── Базовые CSS-переменные (значения по умолчанию) ─── */
+:root {
+  /* Отступы */
+  --vs-padding: 24px;
+  --vs-padding-y: 24px;
+  --vs-padding-x: 24px;
+  --vs-margin: 16px;
+  --vs-gap: 16px;
+
+  /* Типографика */
+  --vs-font-size: 16px;
+  --vs-line-height: 1.5;
+  --vs-letter-spacing: 0px;
+  --vs-font-weight: 400;
+
+  /* Форма */
+  --vs-radius: 12px;
+  --vs-radius-sm: 8px;
+  --vs-radius-lg: 20px;
+  --vs-border-width: 1px;
+  --vs-border-color: rgba(255,255,255,0.1);
+
+  /* Тень */
+  --vs-shadow-x: 0px;
+  --vs-shadow-y: 4px;
+  --vs-shadow-blur: 12px;
+  --vs-shadow-spread: 0px;
+  --vs-shadow-opacity: 0.15;
+  --vs-shadow-color: 0, 0, 0;
+
+  /* Анимация */
+  --vs-transition-duration: 0.3s;
+  --vs-transition-delay: 0s;
+  --vs-easing: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Размеры */
+  --vs-width: auto;
+  --vs-max-width: 1200px;
+  --vs-height: auto;
+}
+
+/* ─── Стили панели ─── */
+#vs-panel {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 320px;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  background: #1a1a2e;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  z-index: 2147483647;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  color: #e0e0e0;
+  user-select: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+#vs-panel.vs-collapsed {
+  transform: translateX(calc(100% - 44px));
+}
+
+#vs-panel::-webkit-scrollbar { width: 6px; }
+#vs-panel::-webkit-scrollbar-track { background: transparent; }
+#vs-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+
+/* Header */
+#vs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  cursor: grab;
+  position: sticky;
+  top: 0;
+  background: #1a1a2e;
+  z-index: 10;
+}
+
+#vs-header:active { cursor: grabbing; }
+
+#vs-title {
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#vs-title::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f97316, #fbbf24);
+  box-shadow: 0 0 8px rgba(249,115,22,0.5);
+}
+
+#vs-toggle {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: rgba(255,255,255,0.06);
+  border-radius: 8px;
+  color: #888;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+#vs-toggle:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* Sections */
+.vs-section {
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  padding: 12px 16px;
+}
+
+.vs-section-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #888;
+  margin-bottom: 10px;
+}
+
+/* Controls */
+.vs-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.vs-control:last-child { margin-bottom: 0; }
+
+.vs-control-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vs-label {
+  font-size: 11px;
+  color: #b0b0b0;
+  flex-shrink: 0;
+}
+
+.vs-value {
+  font-size: 11px;
+  color: #fbbf24;
+  font-variant-numeric: tabular-nums;
+  min-width: 50px;
+  text-align: right;
+  font-family: 'SF Mono', 'Cascadia Code', Consolas, monospace;
+}
+
+/* Range slider */
+.vs-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.vs-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f97316;
+  cursor: grab;
+  box-shadow: 0 0 0 3px rgba(249,115,22,0.2);
+  transition: box-shadow 0.15s;
+}
+
+.vs-slider::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 5px rgba(249,115,22,0.25);
+}
+
+.vs-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  box-shadow: 0 0 0 6px rgba(249,115,22,0.3);
+}
+
+.vs-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: none;
+  border-radius: 50%;
+  background: #f97316;
+  cursor: grab;
+  box-shadow: 0 0 0 3px rgba(249,115,22,0.2);
+}
+
+/* Color input */
+.vs-color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vs-color-input {
+  width: 32px;
+  height: 24px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  background: none;
+  padding: 0;
+}
+
+.vs-color-text {
+  flex: 1;
+  font-size: 11px;
+  color: #b0b0b0;
+  font-family: 'SF Mono', Consolas, monospace;
+}
+
+/* Buttons */
+#vs-actions {
+  padding: 12px 16px;
+  display: flex;
+  gap: 8px;
+  position: sticky;
+  bottom: 0;
+  background: #1a1a2e;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.vs-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  color: #e0e0e0;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.vs-btn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.15);
+}
+
+.vs-btn-primary {
+  background: linear-gradient(135deg, #f97316, #ea580c);
+  border-color: transparent;
+  color: #fff;
+}
+
+.vs-btn-primary:hover {
+  background: linear-gradient(135deg, #fb923c, #f97316);
+}
+
+/* Toast */
+#vs-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: #1a1a2e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 10px 20px;
+  font-size: 12px;
+  color: #fbbf24;
+  font-family: -apple-system, sans-serif;
+  z-index: 2147483647;
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+#vs-toast.vs-show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* Resizable handle */
+#vs-resize {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+#vs-resize:hover { background: rgba(249,115,22,0.3); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     ДЕМО-КОНТЕНТ — удалите этот блок при подключении к реальной странице
+     ═══════════════════════════════════════════════════════════════ -->
+<div style="min-height:100vh; background:#0f0f1a; display:flex; align-items:center; justify-content:center; padding:40px;">
+
+  <div style="
+    background: var(--vs-padding) var(--vs-padding);
+    padding: var(--vs-padding-y) var(--vs-padding-x);
+    margin: var(--vs-margin);
+    border-radius: var(--vs-radius);
+    border: var(--vs-border-width) solid var(--vs-border-color);
+    box-shadow: var(--vs-shadow-x) var(--vs-shadow-y) var(--vs-shadow-blur) var(--vs-shadow-spread) rgba(var(--vs-shadow-color), var(--vs-shadow-opacity));
+    max-width: var(--vs-max-width);
+    width: 100%;
+    transition: all var(--vs-transition-duration) var(--vs-easing) var(--vs-transition-delay);
+  ">
+    <h1 style="
+      font-size: var(--vs-font-size);
+      line-height: var(--vs-line-height);
+      letter-spacing: var(--vs-letter-spacing);
+      font-weight: var(--vs-font-weight);
+      color: #f0f0f0;
+      margin: 0 0 var(--vs-gap) 0;
+    ">Vector Slide Demo</h1>
+    <p style="color:#888; margin:0 0 var(--vs-gap) 0; line-height:var(--vs-line-height);">
+      Крутите ползунки на панели справа. Все изменения применяются вживую.
+      Этот блок использует CSS-переменные для всех параметров.
+    </p>
+    <div style="display:flex; gap:var(--vs-gap);">
+      <button style="
+        padding: var(--vs-padding-y) calc(var(--vs-padding-x) * 0.67);
+        border-radius: var(--vs-radius-sm);
+        background: linear-gradient(135deg, #f97316, #ea580c);
+        border: none; color: #fff; cursor: pointer;
+        font-size: calc(var(--vs-font-size) * 0.875);
+        transition: all var(--vs-transition-duration) var(--vs-easing);
+      ">Primary Button</button>
+      <button style="
+        padding: var(--vs-padding-y) calc(var(--vs-padding-x) * 0.67);
+        border-radius: var(--vs-radius-sm);
+        background: transparent;
+        border: var(--vs-border-width) solid var(--vs-border-color);
+        color: #ccc; cursor: pointer;
+        font-size: calc(var(--vs-font-size) * 0.875);
+        transition: all var(--vs-transition-duration) var(--vs-easing);
+      ">Secondary</button>
+    </div>
+  </div>
+</div>
+<!-- ═══════════════════════════════════════════════════════════════
+     /ДЕМО-КОНТЕНТ
+     ═══════════════════════════════════════════════════════════════ -->
+
+<!-- ═══════════════════════════════════════════════════════════════
+     VECTOR SLIDE PANEL — скопируйте этот блок на вашу страницу
+     ═══════════════════════════════════════════════════════════════ -->
+<div id="vs-panel">
+  <div id="vs-resize"></div>
+  <div id="vs-header">
+    <span id="vs-title">Vector Slide</span>
+    <button id="vs-toggle" title="Свернуть/развернуть">◀</button>
+  </div>
+
+  <!-- Отступы -->
+  <div class="vs-section">
+    <div class="vs-section-title">Отступы</div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Padding (общий)</span><span class="vs-value" id="val-padding">24px</span></div>
+      <input type="range" class="vs-slider" id="padding" min="0" max="80" value="24" data-unit="px" data-var="--vs-padding">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Padding Y</span><span class="vs-value" id="val-padding-y">24px</span></div>
+      <input type="range" class="vs-slider" id="padding-y" min="0" max="80" value="24" data-unit="px" data-var="--vs-padding-y">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Padding X</span><span class="vs-value" id="val-padding-x">24px</span></div>
+      <input type="range" class="vs-slider" id="padding-x" min="0" max="80" value="24" data-unit="px" data-var="--vs-padding-x">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Margin</span><span class="vs-value" id="val-margin">16px</span></div>
+      <input type="range" class="vs-slider" id="margin" min="0" max="80" value="16" data-unit="px" data-var="--vs-margin">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Gap</span><span class="vs-value" id="val-gap">16px</span></div>
+      <input type="range" class="vs-slider" id="gap" min="0" max="60" value="16" data-unit="px" data-var="--vs-gap">
+    </div>
+  </div>
+
+  <!-- Типографика -->
+  <div class="vs-section">
+    <div class="vs-section-title">Типографика</div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Размер шрифта</span><span class="vs-value" id="val-font-size">16px</span></div>
+      <input type="range" class="vs-slider" id="font-size" min="10" max="48" value="16" data-unit="px" data-var="--vs-font-size">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Высота строки</span><span class="vs-value" id="val-line-height">1.5</span></div>
+      <input type="range" class="vs-slider" id="line-height" min="1" max="2.5" step="0.05" value="1.5" data-unit="" data-var="--vs-line-height">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Letter spacing</span><span class="vs-value" id="val-letter-spacing">0px</span></div>
+      <input type="range" class="vs-slider" id="letter-spacing" min="-3" max="10" step="0.5" value="0" data-unit="px" data-var="--vs-letter-spacing">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Font weight</span><span class="vs-value" id="val-font-weight">400</span></div>
+      <input type="range" class="vs-slider" id="font-weight" min="100" max="900" step="100" value="400" data-unit="" data-var="--vs-font-weight">
+    </div>
+  </div>
+
+  <!-- Форма -->
+  <div class="vs-section">
+    <div class="vs-section-title">Форма</div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Border radius</span><span class="vs-value" id="val-radius">12px</span></div>
+      <input type="range" class="vs-slider" id="radius" min="0" max="50" value="12" data-unit="px" data-var="--vs-radius">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Radius small</span><span class="vs-value" id="val-radius-sm">8px</span></div>
+      <input type="range" class="vs-slider" id="radius-sm" min="0" max="30" value="8" data-unit="px" data-var="--vs-radius-sm">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Radius large</span><span class="vs-value" id="val-radius-lg">20px</span></div>
+      <input type="range" class="vs-slider" id="radius-lg" min="0" max="80" value="20" data-unit="px" data-var="--vs-radius-lg">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Border width</span><span class="vs-value" id="val-border-width">1px</span></div>
+      <input type="range" class="vs-slider" id="border-width" min="0" max="10" step="0.5" value="1" data-unit="px" data-var="--vs-border-width">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Border color</span></div>
+    </div>
+    <div class="vs-color-row">
+      <input type="color" class="vs-color-input" id="border-color" value="#ffffff1a">
+      <span class="vs-color-text" id="val-border-color">rgba(255,255,255,0.1)</span>
+    </div>
+  </div>
+
+  <!-- Тень -->
+  <div class="vs-section">
+    <div class="vs-section-title">Тень</div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Offset X</span><span class="vs-value" id="val-shadow-x">0px</span></div>
+      <input type="range" class="vs-slider" id="shadow-x" min="-50" max="50" value="0" data-unit="px" data-var="--vs-shadow-x">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Offset Y</span><span class="vs-value" id="val-shadow-y">4px</span></div>
+      <input type="range" class="vs-slider" id="shadow-y" min="-50" max="50" value="4" data-unit="px" data-var="--vs-shadow-y">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Blur</span><span class="vs-value" id="val-shadow-blur">12px</span></div>
+      <input type="range" class="vs-slider" id="shadow-blur" min="0" max="100" value="12" data-unit="px" data-var="--vs-shadow-blur">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Spread</span><span class="vs-value" id="val-shadow-spread">0px</span></div>
+      <input type="range" class="vs-slider" id="shadow-spread" min="-30" max="30" value="0" data-unit="px" data-var="--vs-shadow-spread">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Opacity</span><span class="vs-value" id="val-shadow-opacity">0.15</span></div>
+      <input type="range" class="vs-slider" id="shadow-opacity" min="0" max="1" step="0.01" value="0.15" data-unit="" data-var="--vs-shadow-opacity">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Shadow color</span></div>
+    </div>
+    <div class="vs-color-row">
+      <input type="color" class="vs-color-input" id="shadow-color" value="#000000">
+      <span class="vs-color-text" id="val-shadow-color">0, 0, 0</span>
+    </div>
+  </div>
+
+  <!-- Анимация -->
+  <div class="vs-section">
+    <div class="vs-section-title">Анимация</div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Duration</span><span class="vs-value" id="val-transition-duration">0.3s</span></div>
+      <input type="range" class="vs-slider" id="transition-duration" min="0" max="3" step="0.05" value="0.3" data-unit="s" data-var="--vs-transition-duration">
+    </div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Delay</span><span class="vs-value" id="val-transition-delay">0s</span></div>
+      <input type="range" class="vs-slider" id="transition-delay" min="0" max="2" step="0.05" value="0" data-unit="s" data-var="--vs-transition-delay">
+    </div>
+  </div>
+
+  <!-- Размеры -->
+  <div class="vs-section">
+    <div class="vs-section-title">Размеры</div>
+    <div class="vs-control">
+      <div class="vs-control-row"><span class="vs-label">Max width</span><span class="vs-value" id="val-max-width">1200px</span></div>
+      <input type="range" class="vs-slider" id="max-width" min="320" max="1920" step="20" value="1200" data-unit="px" data-var="--vs-max-width">
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div id="vs-actions">
+    <button class="vs-btn" id="vs-reset">Reset</button>
+    <button class="vs-btn" id="vs-copy-css">Copy CSS</button>
+    <button class="vs-btn vs-btn-primary" id="vs-done">Done</button>
+  </div>
+</div>
+
+<div id="vs-toast">CSS скопирован в буфер</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ─── Конфиг ───
+  const ROOT = document.documentElement;
+  const panel = document.getElementById('vs-panel');
+  const toast = document.getElementById('vs-toast');
+
+  // Сохранённые значения по умолчанию
+  const defaults = {};
+
+  // ─── Инициализация ползунков ───
+  const sliders = document.querySelectorAll('.vs-slider');
+
+  sliders.forEach(slider => {
+    const id = slider.id;
+    const cssVar = slider.dataset.var;
+    const unit = slider.dataset.unit || '';
+    const valueEl = document.getElementById('val-' + id);
+
+    // Сохранить значение по умолчанию
+    defaults[id] = { value: slider.value, unit, cssVar };
+
+    // Применить начальное значение
+    applyValue(cssVar, slider.value, unit);
+    updateLabel(valueEl, slider.value, unit);
+
+    // Событие изменения
+    slider.addEventListener('input', () => {
+      applyValue(cssVar, slider.value, unit);
+      updateLabel(valueEl, slider.value, unit);
+    });
+  });
+
+  // ─── Color inputs ───
+  const borderColorInput = document.getElementById('border-color');
+  const borderColorLabel = document.getElementById('val-border-color');
+  const shadowColorInput = document.getElementById('shadow-color');
+  const shadowColorLabel = document.getElementById('val-shadow-color');
+
+  borderColorInput.addEventListener('input', () => {
+    const v = borderColorInput.value;
+    // Convert hex to rgba
+    const r = parseInt(v.slice(1,3), 16);
+    const g = parseInt(v.slice(3,5), 16);
+    const b = parseInt(v.slice(5,7), 16);
+    const a = (parseInt(v.slice(7,9) || 'ff', 16) / 255).toFixed(2);
+    const rgba = `rgba(${r},${g},${b},${a})`;
+    ROOT.style.setProperty('--vs-border-color', rgba);
+    borderColorLabel.textContent = rgba;
+  });
+
+  shadowColorInput.addEventListener('input', () => {
+    const v = shadowColorInput.value;
+    const r = parseInt(v.slice(1,3), 16);
+    const g = parseInt(v.slice(3,5), 16);
+    const b = parseInt(v.slice(5,7), 16);
+    const rgbStr = `${r}, ${g}, ${b}`;
+    ROOT.style.setProperty('--vs-shadow-color', rgbStr);
+    shadowColorLabel.textContent = rgbStr;
+  });
+
+  // ─── Применение значения ───
+  function applyValue(cssVar, value, unit) {
+    ROOT.style.setProperty(cssVar, value + unit);
+  }
+
+  function updateLabel(el, value, unit) {
+    if (el) el.textContent = value + unit;
+  }
+
+  // ─── Reset ───
+  document.getElementById('vs-reset').addEventListener('click', () => {
+    sliders.forEach(slider => {
+      const id = slider.id;
+      const def = defaults[id];
+      slider.value = def.value;
+      applyValue(def.cssVar, def.value, def.unit);
+      updateLabel(document.getElementById('val-' + id), def.value, def.unit);
+    });
+    borderColorInput.value = '#ffffff1a';
+    ROOT.style.setProperty('--vs-border-color', 'rgba(255,255,255,0.1)');
+    borderColorLabel.textContent = 'rgba(255,255,255,0.1)';
+    shadowColorInput.value = '#000000';
+    ROOT.style.setProperty('--vs-shadow-color', '0, 0, 0');
+    shadowColorLabel.textContent = '0, 0, 0';
+    showToast('Значения сброшены');
+  });
+
+  // ─── Copy CSS ───
+  document.getElementById('vs-copy-css').addEventListener('click', () => {
+    const css = generateCSS();
+    navigator.clipboard.writeText(css).then(() => {
+      showToast('CSS скопирован в буфер');
+    }).catch(() => {
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = css;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('CSS скопирован в буфер');
+    });
+    console.log('═══ Vector Slide CSS ═══\n' + css);
+  });
+
+  function generateCSS() {
+    const vars = {};
+    sliders.forEach(slider => {
+      const id = slider.id;
+      const cssVar = slider.dataset.var;
+      const unit = slider.dataset.unit || '';
+      vars[cssVar] = slider.value + unit;
+    });
+    // Colors
+    vars['--vs-border-color'] = borderColorLabel.textContent;
+    vars['--vs-shadow-color'] = shadowColorLabel.textContent;
+
+    let css = ':root {\n';
+    for (const [key, value] of Object.entries(vars)) {
+      css += `  ${key}: ${value};\n`;
+    }
+    css += '}\n\n';
+    css += '/* Shadow usage:\n';
+    css += '   box-shadow: var(--vs-shadow-x) var(--vs-shadow-y) var(--vs-shadow-blur) var(--vs-shadow-spread) rgba(var(--vs-shadow-color), var(--vs-shadow-opacity));\n';
+    css += ' */';
+    return css;
+  }
+
+  // ─── Done (remove panel, print CSS to console) ───
+  document.getElementById('vs-done').addEventListener('click', () => {
+    const css = generateCSS();
+    console.log('%c═══ Vector Slide — Final CSS ═══', 'color: #f97316; font-weight: bold; font-size: 14px;');
+    console.log(css);
+    showToast('CSS в консоли. Панель закрывается...');
+    setTimeout(() => {
+      panel.style.transform = 'translateX(120%)';
+      panel.style.opacity = '0';
+      setTimeout(() => panel.remove(), 300);
+    }, 800);
+  });
+
+  // ─── Toast ───
+  let toastTimer;
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('vs-show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('vs-show'), 2000);
+  }
+
+  // ─── Collapse / Expand ───
+  const toggleBtn = document.getElementById('vs-toggle');
+  toggleBtn.addEventListener('click', () => {
+    panel.classList.toggle('vs-collapsed');
+    toggleBtn.textContent = panel.classList.contains('vs-collapsed') ? '▶' : '◀';
+  });
+
+  // ─── Drag panel by header ───
+  const header = document.getElementById('vs-header');
+  let isDragging = false;
+  let dragOffsetX = 0;
+  let dragOffsetY = 0;
+
+  header.addEventListener('mousedown', (e) => {
+    if (e.target === toggleBtn) return;
+    isDragging = true;
+    const rect = panel.getBoundingClientRect();
+    dragOffsetX = e.clientX - rect.left;
+    dragOffsetY = e.clientY - rect.top;
+    panel.style.transition = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    let x = e.clientX - dragOffsetX;
+    let y = e.clientY - dragOffsetY;
+    // Clamp to viewport
+    x = Math.max(0, Math.min(x, window.innerWidth - 60));
+    y = Math.max(0, Math.min(y, window.innerHeight - 60));
+    panel.style.left = x + 'px';
+    panel.style.top = y + 'px';
+    panel.style.right = 'auto';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      panel.style.transition = '';
+    }
+  });
+
+  // ─── Resize panel width ───
+  const resizeHandle = document.getElementById('vs-resize');
+  let isResizing = false;
+  let resizeStartX = 0;
+  let resizeStartWidth = 0;
+
+  resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    resizeStartX = e.clientX;
+    resizeStartWidth = panel.offsetWidth;
+    panel.style.transition = 'none';
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const delta = resizeStartX - e.clientX;
+    const newWidth = Math.max(280, Math.min(500, resizeStartWidth + delta));
+    panel.style.width = newWidth + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false;
+      panel.style.transition = '';
+    }
+  });
+
+  // ─── Keyboard shortcut: Ctrl+Shift+V to toggle ───
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+      e.preventDefault();
+      if (panel.style.display === 'none') {
+        panel.style.display = '';
+      } else {
+        panel.style.display = 'none';
+      }
+    }
+  });
+
+  console.log('%cVector Slide', 'color: #f97316; font-weight: bold; font-size: 16px;');
+  console.log('Live design jig loaded. Ctrl+Shift+V to toggle panel.');
+  console.log('All CSS variables use --vs- prefix.');
+
+})();
+</script>
+</body>
+</html>
