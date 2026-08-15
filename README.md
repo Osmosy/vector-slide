@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/vector-logo.svg" width="120" height="120" alt="Vector Logo">
+  <img src="assets/vector-logo.png" width="240" alt="Vector Logo">
 </p>
 
 <h1 align="center">Vector Slide</h1>
